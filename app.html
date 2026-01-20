@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Gerar Contrato</title>
+  <link rel="stylesheet" href="assets/style.css">
+
+  <!-- html2pdf: gera PDF no client -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+<body>
+  <header class="top">
+    <h2>Gerador de Contrato</h2>
+    <button id="logout" class="ghost">Sair</button>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <h3>Dados do contrato</h3>
+
+      <div class="grid">
+        <div>
+          <label>Nome</label>
+          <input id="nome" />
+        </div>
+        <div>
+          <label>RG</label>
+          <input id="rg" />
+        </div>
+        <div>
+          <label>CPF</label>
+          <input id="cpf" />
+        </div>
+        <div>
+          <label>Endereço completo</label>
+          <input id="endereco" />
+        </div>
+
+        <div>
+          <label>Pacote</label>
+          <input id="pacote" />
+        </div>
+        <div>
+          <label>Valor do pacote</label>
+          <input id="valor_pacote" />
+        </div>
+        <div>
+          <label>Tema</label>
+          <input id="tema" />
+        </div>
+        <div>
+          <label>Adicionais com respectivos valores</label>
+          <input id="adicionais" placeholder="Ex: Algodão doce (R$ 80), Foto (R$ 150)" />
+        </div>
+
+        <div>
+          <label>Data da festa</label>
+          <input id="data_festa" placeholder="dd/mm/aaaa" />
+        </div>
+
+        <div>
+          <label>Horário (das ___ até ___)</label>
+          <input id="horario" placeholder="Ex: 18:00 até 22:00" />
+        </div>
+
+        <div>
+          <label>Total de horas</label>
+          <input id="total_horas" />
+        </div>
+
+        <div>
+          <label>Valor total do contrato</label>
+          <input id="valor_total" />
+        </div>
+
+        <div>
+          <label>Valor total por extenso</label>
+          <input id="valor_extenso" />
+        </div>
+
+        <div>
+          <label>Próximos vencimentos</label>
+          <input id="vencimentos" placeholder="Ex: 10/02 - R$ 300; 10/03 - R$ 300" />
+        </div>
+      </div>
+
+      <button id="gerar" class="primary">Gerar contrato (PDF)</button>
+      <p class="hint">Ao clicar, o contrato será montado e baixado automaticamente.</p>
+    </section>
+
+    <!-- Aqui a gente injeta o contrato HTML já com os valores -->
+    <section class="card">
+      <h3>Pré-visualização</h3>
+      <div id="preview" class="preview"></div>
+    </section>
+  </main>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
