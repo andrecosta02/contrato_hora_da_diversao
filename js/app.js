@@ -199,93 +199,136 @@ function cleanGoogleDocsFooter(text) {
   return filtered.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
+function validateRequiredFields(data) {
+  const required = [
+    ["nome", "Nome"],
+    ["cpf", "CPF"],
+    ["endereco_completo", "Endereço completo"],
+    ["pacote", "Pacote"],
+    ["data_festa", "Data da festa"],
+    ["hora_inicio", "Hora início"],
+    ["hora_fim", "Hora fim"],
+    ["valor_total_contrato", "Valor total do contrato"],
+  ];
+
+  return required
+    .filter(([key]) => !String(data[key] || "").trim())
+    .map(([, label]) => label);
+}
+
+function toPtBrLongDate(date = new Date()) {
+  return date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric"
+  });
+}
+
+
+
 async function gerarContratoPDF() {
   const data = getFormData();
 
+  // validação básica
+  const missing = validateRequiredFields(data);
+  if (missing.length) {
+    alert("Preencha os campos obrigatórios:\n• " + missing.join("\n• "));
+    return;
+  }
+
+  // usa funções EXISTENTES do seu app.js antigo
   const rawHtml = await fetchTemplateHtml();
   const templateBody = extractBodyHtml(rawHtml);
-
   const filledHtml = applyTemplate(templateBody, data);
-  let plainText = htmlToPlainText(filledHtml);
-  plainText = cleanGoogleDocsFooter(plainText);
 
-  // jsPDF (texto real)
+  let text = htmlToPlainText(filledHtml);
+  text = cleanGoogleDocsFooter(text);
+
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
-  // Medidas A4 em mm
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-
-  // Margens
   const marginX = 16;
-  const marginTop = 18;
-  const marginBottom = 18;
+  const top = 18;
+  const bottom = pageH - 18;
 
-  // Logo
-  let cursorY = marginTop;
+  let y = top;
 
+  // logo
   if (USE_LOGO) {
     try {
-      const dataUrl = await loadImageAsDataURL(LOGO_SRC);
-
-      // Dimensões da logo (mm)
-      const maxW = 60;
-      const maxH = 22;
-
-      // addImage precisa do tipo: detecta pelo dataURL
-      const imgType = dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
-
-      // Tenta colocar com tamanho fixo (centralizado)
-      const imgW = maxW;
-      const imgH = maxH;
-      const x = (pageW - imgW) / 2;
-
-      doc.addImage(dataUrl, imgType, x, cursorY, imgW, imgH);
-      cursorY += imgH + 8;
-    } catch (e) {
-      // Se falhar a logo, segue sem travar
-      cursorY += 4;
-    }
+      const img = await loadImageAsDataURL(LOGO_SRC);
+      const type = img.includes("png") ? "PNG" : "JPEG";
+      const w = 60, h = 22;
+      doc.addImage(img, type, (pageW - w) / 2, y, w, h);
+      y += h + 6;
+    } catch {}
   }
 
-  // Fonte e layout de texto
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(12);
+  const lines = text.split("\n").map(l => l.trimEnd());
 
-  const lineHeight = 6; // mm
-  const usableW = pageW - marginX * 2;
-  const usableH = pageH - marginBottom;
+  // título (primeira linha não vazia)
+  const titleIndex = lines.findIndex(l => l.trim());
+  if (titleIndex >= 0) {
+    doc.setFont("times", "bold");
+    doc.setFontSize(14);
+    doc.text(lines[titleIndex], pageW / 2, y, { align: "center" });
+    y += 8;
+  }
 
-  // Quebra o texto em linhas que cabem na largura
-  const paragraphs = plainText.split("\n");
-  for (const p of paragraphs) {
-    const para = p.trimEnd();
+  doc.setFont("times", "normal");
+  doc.setFontSize(11);
 
-    // linha em branco
-    if (para.trim() === "") {
-      cursorY += lineHeight;
-      if (cursorY > usableH) {
-        doc.addPage();
-        cursorY = marginTop;
-      }
+  for (let i = titleIndex + 1; i < lines.length; i++) {
+    const t = lines[i].trim();
+
+    if (!t) {
+      y += 5;
       continue;
     }
 
-    const lines = doc.splitTextToSize(para, usableW);
-
-    for (const line of lines) {
-      if (cursorY > usableH) {
-        doc.addPage();
-        cursorY = marginTop;
-      }
-      doc.text(line, marginX, cursorY);
-      cursorY += lineHeight;
+    if (/^cl[aá]usula/i.test(t)) {
+      y += 3;
+      doc.setFont("times", "bold");
+    } else {
+      doc.setFont("times", "normal");
     }
+
+    const wrapped = doc.splitTextToSize(t, pageW - marginX * 2);
+    wrapped.forEach(line => {
+      if (y > bottom) {
+        doc.addPage();
+        y = top;
+      }
+      doc.text(line, marginX, y);
+      y += 5.6;
+    });
+  }
+
+  // assinaturas
+  y += 10;
+  doc.text(`Data: ${toPtBrLongDate()}`, marginX, y);
+  y += 12;
+  doc.text("______________________________________________", marginX, y);
+  y += 6;
+  doc.text("CONTRATANTE", marginX, y);
+  y += 12;
+  doc.text("______________________________________________", marginX, y);
+  y += 6;
+  doc.text("CONTRATADA", marginX, y);
+
+  // paginação
+  const pages = doc.getNumberOfPages();
+  for (let p = 1; p <= pages; p++) {
+    doc.setPage(p);
+    doc.setFontSize(9);
+    doc.text(`Página ${p} de ${pages}`, pageW - marginX, pageH - 10, { align: "right" });
   }
 
   doc.save(`Contrato - ${data.nome || "cliente"}.pdf`);
 }
+
 
 
 document.getElementById("gerar").addEventListener("click", async () => {
