@@ -1,6 +1,5 @@
-// ⚠️ Aviso: isso é "segurança de fachada". Qualquer pessoa que inspecionar o JS vê o usuário/senha.
-// Para seu caso (cliente pequeno) geralmente é ok, mas saiba a limitação.
-
+// Login simples (segurança básica)
+// Troque as credenciais aqui:
 const FIXED_USER = "admin";
 const FIXED_PASS = "1234";
 

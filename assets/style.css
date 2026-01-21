@@ -1,0 +1,34 @@
+/* Visual profissional */
+body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+/* Área usada para gerar PDF (fora da tela, mas não muito longe) */
+.print-area{
+  position: fixed;
+  left: -2000px;
+  top: 0;
+  width: 794px;          /* A4 ~ 96dpi */
+  min-height: 1123px;    /* A4 ~ 96dpi */
+  background: #fff;
+  padding: 68px 60px;    /* margens */
+  color: #111;
+  font-family: Arial, sans-serif;
+  font-size: 12pt;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+
+.print-area, .print-area *{
+  box-sizing: border-box;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.print-area .logo-wrap{
+  display:flex;
+  justify-content:center;
+  margin-bottom: 24px;
+}
+.print-area .logo-wrap img{
+  max-height: 80px;
+  width: auto;
+}

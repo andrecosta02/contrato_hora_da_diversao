@@ -1,113 +1,73 @@
-/**
- * app.js — Front 100% estático (GitHub Pages) + Google Apps Script (proxy) para buscar o template
- * - Busca o HTML do Google Docs publicado via Apps Script (evita CORS)
- * - Substitui chaves {{...}} pelos valores do formulário
- * - Injeta logo (opcional) e gera PDF no client com html2pdf
- *
- * Pré-requisitos no app.html:
- * 1) Ter um <div id="preview"></div>
- * 2) Ter o botão <button id="gerar">...</button>
- * 3) Ter um botão <button id="logout">...</button> (opcional)
- * 4) Incluir: html2pdf.bundle.min.js
- *    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
- *
- * Campos esperados (ids):
- * nome, rg, cpf, endereco, pacote, valor_pacote, tema, adicionais, data_festa,
- * hora_inicio, hora_fim, total_horas, valor_total, valor_extenso, vencimentos
- *
- * Ajuste as constantes APPS_SCRIPT_URL e GOOGLE_DOC_PUB_ID abaixo.
- */
-
 // =========================
-// 1) CONFIGURAÇÕES
+// CONFIG
 // =========================
+const GOOGLE_DOC_PUB_URL_BASE =
+  "https://docs.google.com/document/d/e/2PACX-1vT99qWFGHbZKw7GFCxtdI5HR0dV4C7v8LmXNsGIfwFjvd2OqiG2gjC51yFalSwhrg/pub";
 
-// URL do seu Web App do Apps Script (Implantar → Aplicativo da Web → URL)
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyPfAvgIGpQBDcO1Y75ZF2K43uR5lQ4ZtNK0Qmn4oi5kz70xf3X1RxDBXpEVV5pJg1e/exec";
+const APPS_SCRIPT_URL =
+  "https://script.google.com/macros/s/AKfycbyPfAvgIGpQBDcO1Y75ZF2K43uR5lQ4ZtNK0Qmn4oi5kz70xf3X1RxDBXpEVV5pJg1e/exec";
 
-// ID do doc publicado (a parte 2PACX-...)
-// Exemplo de link publicado:
-// https://docs.google.com/document/d/e/2PACX-XXXXX/pub
-// Então o ID é: 2PACX-XXXXX
-const GOOGLE_DOC_PUB_ID = "2PACX-1vT99qWFGHbZKw7GFCxtdI5HR0dV4C7v8LmXNsGIfwFjvd2OqiG2gjC51yFalSwhrg";
+const TEMPLATE_URL = `${APPS_SCRIPT_URL}?url=${encodeURIComponent(GOOGLE_DOC_PUB_URL_BASE)}`;
 
-// Monta a URL correta do Google Docs publicado (IMPORTANTE: precisa ter /pub)
-const GOOGLE_DOC_PUB_URL = `https://docs.google.com/document/d/e/${GOOGLE_DOC_PUB_ID}/pub?output=html`;
-
-// Template URL via proxy (evita CORS)
-const TEMPLATE_URL = `${APPS_SCRIPT_URL}?url=${encodeURIComponent(GOOGLE_DOC_PUB_URL)}`;
-
-// Se quiser injetar logo no topo do PDF (recomendado p/ não depender do Google Docs)
 const USE_LOGO = true;
-// Caminho da logo dentro do seu repo (ex: contrato/assets/logo.png)
-// const LOGO_SRC = "assets/logo.png";
-const LOGO_SRC = "assets/logo.jpg";
-// Tamanho máximo da logo no PDF (via CSS inline)
-const LOGO_MAX_HEIGHT_PX = 70;
+const LOGO_SRC = "./assets/logo.jpg";
 
 // =========================
-// 2) PROTEÇÃO / LOGOUT
+// AUTH / LOGOUT
 // =========================
 if (sessionStorage.getItem("auth") !== "ok") {
-  // se você não estiver usando login, pode remover este bloco
   window.location.href = "index.html";
 }
-
-const logoutBtn = document.getElementById("logout");
-if (logoutBtn) {
-  logoutBtn.addEventListener("click", () => {
-    sessionStorage.removeItem("auth");
-    window.location.href = "index.html";
-  });
-}
+document.getElementById("logout").addEventListener("click", () => {
+  sessionStorage.removeItem("auth");
+  window.location.href = "index.html";
+});
 
 // =========================
-// 3) UTILITÁRIOS
+// MASKS
 // =========================
-function escapeHtml(str) {
-  return str
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
+function applyMasks() {
+  const cpfEl = document.getElementById("cpf");
+  if (cpfEl) IMask(cpfEl, { mask: "000.000.000-00" });
 
-/**
- * Substitui {{chave}} pelo valor correspondente no objeto data.
- * Se não existir, coloca "—".
- */
-function applyTemplate(html, data) {
-  return html.replace(/\{\{(\w+)\}\}/g, (_, key) => {
-    const v = data[key];
-    return v ? escapeHtml(String(v)) : "—";
-  });
-}
+  const rgEl = document.getElementById("rg");
+  if (rgEl) IMask(rgEl, { mask: "00.000.000-0" });
 
-/**
- * Extrai apenas o conteúdo do <body> do HTML retornado pelo Google Docs.
- * (O Google entrega uma página completa.)
- */
-function extractBodyHtml(fullHtml) {
-  const doc = new DOMParser().parseFromString(fullHtml, "text/html");
-  // Remove scripts por segurança (normalmente nem vem)
-  doc.querySelectorAll("script").forEach((s) => s.remove());
-  return doc.body ? doc.body.innerHTML : fullHtml;
-}
+  const dataEl = document.getElementById("data_festa");
+  if (dataEl) IMask(dataEl, { mask: "00/00/0000" });
 
-/**
- * Busca o HTML do template via Apps Script proxy (evita CORS).
- */
-async function fetchTemplateHtml() {
-  const res = await fetch(TEMPLATE_URL, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`Não consegui baixar o modelo do contrato. HTTP ${res.status}`);
-  }
-  return await res.text();
+  const hourMask = { mask: "00:00" };
+  const hIni = document.getElementById("hora_inicio");
+  const hFim = document.getElementById("hora_fim");
+  if (hIni) IMask(hIni, hourMask);
+  if (hFim) IMask(hFim, hourMask);
+
+  const horasEl = document.getElementById("total_horas");
+  if (horasEl) IMask(horasEl, { mask: Number, scale: 0, min: 0, max: 24 });
+
+  const moneyOpts = {
+    mask: "R$ num",
+    blocks: {
+      num: {
+        mask: Number,
+        thousandsSeparator: ".",
+        radix: ",",
+        scale: 2,
+        padFractionalZeros: true,
+        normalizeZeros: true,
+        min: 0
+      }
+    }
+  };
+  const vp = document.getElementById("valor_pacote");
+  const vt = document.getElementById("valor_total");
+  if (vp) IMask(vp, moneyOpts);
+  if (vt) IMask(vt, moneyOpts);
 }
+applyMasks();
 
 // =========================
-// 4) LEITURA DOS CAMPOS DO FORM
+// UTILS
 // =========================
 function getValue(id) {
   const el = document.getElementById(id);
@@ -115,7 +75,6 @@ function getValue(id) {
 }
 
 function getFormData() {
-  // Ajuste aqui se quiser nomes diferentes nas chaves {{...}}
   const now = new Date();
   const dia = String(now.getDate()).padStart(2, "0");
   const mes = now.toLocaleString("pt-BR", { month: "long" });
@@ -125,39 +84,119 @@ function getFormData() {
     rg: getValue("rg"),
     cpf: getValue("cpf"),
     endereco_completo: getValue("endereco"),
-
     pacote: getValue("pacote"),
     valor_pacote: getValue("valor_pacote"),
     tema: getValue("tema"),
     adicionais: getValue("adicionais"),
-
     data_festa: getValue("data_festa"),
     hora_inicio: getValue("hora_inicio"),
     hora_fim: getValue("hora_fim"),
-
     total_horas: getValue("total_horas"),
-
     valor_total_contrato: getValue("valor_total"),
     valor_total_contrato_extenso: getValue("valor_extenso"),
-
     proximos_vencimentos: getValue("vencimentos"),
-
-    // data de assinatura (se existir no seu template)
     dia_assinatura: dia,
     mes_assinatura: mes,
   };
 }
 
-// =========================
-// 5) GERAÇÃO DO PDF
-// =========================
+function escapeHtml(str) {
+  return str
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function applyTemplate(html, data) {
+  return html.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+    const v = data[key];
+    return v ? escapeHtml(String(v)) : "—";
+  });
+}
+
+function extractBodyHtml(fullHtml) {
+  const doc = new DOMParser().parseFromString(fullHtml, "text/html");
+  doc.querySelectorAll("script, link").forEach(el => el.remove());
+  return doc.body ? doc.body.innerHTML : fullHtml;
+}
+
+async function fetchTemplateHtml() {
+  const res = await fetch(TEMPLATE_URL, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Não consegui baixar o modelo do contrato. HTTP ${res.status}`);
+  const txt = await res.text();
+  if (txt.includes("Não foi possível abrir o arquivo")) {
+    throw new Error("Documento não acessível. Verifique se está PUBLICADO NA WEB.");
+  }
+  return txt;
+}
+
+function htmlToPlainText(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  doc.querySelectorAll("script, style, link").forEach(el => el.remove());
+  doc.querySelectorAll("br").forEach(br => br.replaceWith("\n"));
+  doc.querySelectorAll("p, div").forEach(el => el.append("\n"));
+  let text = doc.body ? doc.body.textContent : "";
+  return text.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function buildHeaderLogoHtml() {
   if (!USE_LOGO) return "";
-  return `
-    <div style="display:flex; align-items:center; justify-content:center; margin: 6px 0 14px 0;">
-      <img src="${LOGO_SRC}" style="max-height:${LOGO_MAX_HEIGHT_PX}px; width:auto;" />
-    </div>
-  `;
+  return `<div class="logo-wrap"><img src="${LOGO_SRC}" alt="Logo"></div>`;
+}
+
+function renderPrintableContract(text) {
+  const safe = escapeHtml(text).replaceAll("\n", "<br/>");
+  return `<div>${safe}</div>`;
+}
+
+function nextFrame() {
+  return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+}
+
+async function waitForImages(container) {
+  const imgs = Array.from(container.querySelectorAll("img"));
+  await Promise.all(imgs.map(img => {
+    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+    return new Promise(resolve => {
+      img.onload = () => resolve();
+      img.onerror = () => resolve();
+    });
+  }));
+}
+
+// =========================
+// PDF
+// =========================
+async function loadImageAsDataURL(url) {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return await new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.readAsDataURL(blob);
+  });
+}
+
+function cleanGoogleDocsFooter(text) {
+  const lines = text.split("\n");
+  const banned = [
+    /Publicada usando o Google Docs/i,
+    /Denunciar abuso/i,
+    /Saiba mais/i,
+    /Atualizado automaticamente/i,
+    /CONTRATO_HD_2026_TEMPLATE/i
+  ];
+
+  const filtered = lines.filter(line => {
+    const t = line.trim();
+    if (!t) return true; // mantém linhas vazias (espaço)
+    return !banned.some(rx => rx.test(t));
+  });
+
+  // remove excesso de linhas em branco no fim
+  return filtered.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 async function gerarContratoPDF() {
@@ -166,93 +205,94 @@ async function gerarContratoPDF() {
   const rawHtml = await fetchTemplateHtml();
   const templateBody = extractBodyHtml(rawHtml);
 
-  // aplica {{chaves}}
   const filledHtml = applyTemplate(templateBody, data);
+  let plainText = htmlToPlainText(filledHtml);
+  plainText = cleanGoogleDocsFooter(plainText);
 
-  // 🔥 CONVERTE PARA TEXTO LIMPO (mata o bug do html2canvas)
-  const plainText = htmlToPlainText(filledHtml);
+  // jsPDF (texto real)
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
-  const preview = document.getElementById("preview");
-  if (!preview) throw new Error("Elemento #preview não encontrado.");
+  // Medidas A4 em mm
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
 
-  // Renderiza num HTML nosso, simples
-  preview.innerHTML = renderPrintableContract(plainText);
+  // Margens
+  const marginX = 16;
+  const marginTop = 18;
+  const marginBottom = 18;
 
-  preview.style.fontFamily = "Arial, sans-serif";
+  // Logo
+  let cursorY = marginTop;
 
-  const opt = {
-    margin: [10, 10, 10, 10],
-    filename: `Contrato - ${data.nome || "cliente"}.pdf`,
-    image: { type: "jpeg", quality: 0.98 },
-    html2canvas: {
-      scale: 2,
-      useCORS: true,
-      foreignObjectRendering: false,
-      windowWidth: 1200
-    },
-    jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-    pagebreak: { mode: ["css", "legacy"] }
-  };
-
-  await html2pdf().set(opt).from(preview).save();
-}
-
-
-// =========================
-// 6) EVENTO DO BOTÃO
-// =========================
-const gerarBtn = document.getElementById("gerar");
-if (!gerarBtn) {
-  console.warn("Botão #gerar não encontrado. Crie um botão com id='gerar'.");
-} else {
-  gerarBtn.addEventListener("click", async () => {
+  if (USE_LOGO) {
     try {
-      await gerarContratoPDF();
-    } catch (err) {
-      console.error(err);
-      alert(err?.message || "Erro ao gerar o contrato em PDF.");
+      const dataUrl = await loadImageAsDataURL(LOGO_SRC);
+
+      // Dimensões da logo (mm)
+      const maxW = 60;
+      const maxH = 22;
+
+      // addImage precisa do tipo: detecta pelo dataURL
+      const imgType = dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
+
+      // Tenta colocar com tamanho fixo (centralizado)
+      const imgW = maxW;
+      const imgH = maxH;
+      const x = (pageW - imgW) / 2;
+
+      doc.addImage(dataUrl, imgType, x, cursorY, imgW, imgH);
+      cursorY += imgH + 8;
+    } catch (e) {
+      // Se falhar a logo, segue sem travar
+      cursorY += 4;
     }
-  });
+  }
+
+  // Fonte e layout de texto
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(12);
+
+  const lineHeight = 6; // mm
+  const usableW = pageW - marginX * 2;
+  const usableH = pageH - marginBottom;
+
+  // Quebra o texto em linhas que cabem na largura
+  const paragraphs = plainText.split("\n");
+  for (const p of paragraphs) {
+    const para = p.trimEnd();
+
+    // linha em branco
+    if (para.trim() === "") {
+      cursorY += lineHeight;
+      if (cursorY > usableH) {
+        doc.addPage();
+        cursorY = marginTop;
+      }
+      continue;
+    }
+
+    const lines = doc.splitTextToSize(para, usableW);
+
+    for (const line of lines) {
+      if (cursorY > usableH) {
+        doc.addPage();
+        cursorY = marginTop;
+      }
+      doc.text(line, marginX, cursorY);
+      cursorY += lineHeight;
+    }
+  }
+
+  doc.save(`Contrato - ${data.nome || "cliente"}.pdf`);
 }
 
 
-
-// Remove tags e deixa só texto (mantém quebras)
-function htmlToPlainText(html) {
-  const doc = new DOMParser().parseFromString(html, "text/html");
-
-  // remove coisas que atrapalham
-  doc.querySelectorAll("script, style, link").forEach(el => el.remove());
-
-  // troca <br> por \n
-  doc.querySelectorAll("br").forEach(br => br.replaceWith("\n"));
-
-  // troca <p> e <div> por blocos com quebra
-  doc.querySelectorAll("p, div").forEach(el => {
-    // coloca quebra no final de cada bloco
-    el.append("\n");
-  });
-
-  // pega texto bruto
-  let text = doc.body ? doc.body.textContent : "";
-
-  // limpa quebras excessivas
-  text = text.replace(/\n{3,}/g, "\n\n").trim();
-
-  return text;
-}
-
-// Renderiza o texto do contrato em um layout simples e “imprimível”
-function renderPrintableContract(text) {
-  // escapa HTML e preserva quebras
-  const safe = escapeHtml(text).replaceAll("\n", "<br/>");
-
-  return `
-    <div style="max-width: 800px; margin: 0 auto; color:#000;">
-      ${buildHeaderLogoHtml()}
-      <div style="font-size:12pt; line-height:1.4;">
-        ${safe}
-      </div>
-    </div>
-  `;
-}
+document.getElementById("gerar").addEventListener("click", async () => {
+  try {
+    await gerarContratoPDF();
+  } catch (e) {
+    console.error(e);
+    alert(e?.message || "Erro ao gerar o PDF.");
+  }
+});
