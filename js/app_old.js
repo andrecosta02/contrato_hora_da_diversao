@@ -224,114 +224,19 @@ function toPtBrLongDate(date = new Date()) {
   });
 }
 
-function isClauseTitle(line) {
-  const t = (line || "").trim();
-  return /^CLÁUSULA\b/i.test(t) || /^CLAUSULA\b/i.test(t);
-}
-
-/**
- * Draw a justified paragraph (Word-like). Justifies all lines except the last.
- */
-function drawJustifiedParagraph(doc, text, x, y, maxW, lineH) {
-  const words = String(text).trim().split(/\s+/).filter(Boolean);
-  if (!words.length) return y;
-
-  const spaceW = doc.getTextWidth(" ");
-  let line = [];
-  let lineW = 0;
-
-  const flush = (isLast) => {
-    if (!line.length) return;
-    if (isLast || line.length === 1) {
-      doc.text(line.join(" "), x, y);
-      y += lineH;
-      return;
-    }
-    const wordsW = line.reduce((sum, w) => sum + doc.getTextWidth(w), 0);
-    const gaps = line.length - 1;
-    const extra = Math.max(0, maxW - wordsW);
-    const gapW = extra / gaps;
-
-    let cx = x;
-    for (let i = 0; i < line.length; i++) {
-      const w = line[i];
-      doc.text(w, cx, y);
-      cx += doc.getTextWidth(w);
-      if (i < line.length - 1) cx += gapW;
-    }
-    y += lineH;
-  };
-
-  for (const w of words) {
-    const wW = doc.getTextWidth(w);
-    const nextW = line.length === 0 ? wW : lineW + spaceW + wW;
-    if (nextW <= maxW) {
-      line.push(w);
-      lineW = nextW;
-    } else {
-      flush(false);
-      line = [w];
-      lineW = wW;
-    }
-  }
-  flush(true);
-  return y;
-}
-
-function addHeader(doc, opts) {
-  const { pageW, marginX, logoDataUrl } = opts;
-
-  let y = 10;
-
-  if (logoDataUrl) {
-    const imgType = logoDataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
-    const imgW = 42;
-    const imgH = 18;
-    doc.addImage(logoDataUrl, imgType, (pageW - imgW) / 2, y, imgW, imgH);
-    y += imgH + 2;
-  }
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  // doc.text("CONTRATO DE ADESÃO DE LOCAÇÃO PARA USO", pageW / 2, y, { align: "center" });
-  // y += 6;
-  // doc.text("DE ESPAÇO & DECORAÇÃO DE FESTA INFANTIL", pageW / 2, y, { align: "center" });
-
-  // subtle separator like a header rule
-  y += 4;
-  doc.setDrawColor(0);
-  doc.setLineWidth(0.2);
-  doc.line(marginX, y, pageW - marginX, y);
-}
-
-function addFooter(doc, opts) {
-  const { pageW, pageH } = opts;
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.text("HORA DA DIVERSÃO", pageW / 2, pageH - 12, { align: "center" });
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
-  doc.text(
-    "Rua Dom Sebastião Leme, 576  |  Bairro Peixinhos |  Olinda  |  CEP:  53230-370  |  Fone: +55 81 99292-9205",
-    pageW / 2,
-    pageH - 7,
-    { align: "center" }
-  );
-}
-
 
 
 async function gerarContratoPDF() {
   const data = getFormData();
 
+  // validação básica
   const missing = validateRequiredFields(data);
   if (missing.length) {
     alert("Preencha os campos obrigatórios:\n• " + missing.join("\n• "));
     return;
   }
 
+  // usa funções EXISTENTES do seu app.js antigo
   const rawHtml = await fetchTemplateHtml();
   const templateBody = extractBodyHtml(rawHtml);
   const filledHtml = applyTemplate(templateBody, data);
@@ -344,76 +249,81 @@ async function gerarContratoPDF() {
 
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-
-  // Margens iguais ao DOC (0,5") ~ 12,7mm
-  const marginX = 12.7;
-
-  // Header/Footer
-  let logoDataUrl = null;
-  if (USE_LOGO) {
-    try {
-      logoDataUrl = await loadImageAsDataURL(LOGO_SRC);
-    } catch {}
-  }
-
-  const headerReserve = 40; // espaço reservado pro cabeçalho
-  const top = headerReserve + 6;
-  const bottom = pageH - 22; // espaço reservado pro rodapé
-
-  const maxW = pageW - marginX * 2;
-  const lineH = 5; // ~10pt
-
-  const applyPageChrome = () => {
-    addHeader(doc, { pageW, marginX, logoDataUrl });
-    addFooter(doc, { pageW, pageH });
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-  };
-
-  applyPageChrome();
+  const marginX = 16;
+  const top = 18;
+  const bottom = pageH - 18;
 
   let y = top;
 
-  const newPage = () => {
-    doc.addPage();
-    applyPageChrome();
-    y = top;
-  };
-
-  // Texto: separar por parágrafos (linha em branco)
-  const paragraphs = text
-    .split(/\n\s*\n/)
-    .map(p => p.trim())
-    .filter(Boolean);
-
-  for (const p of paragraphs) {
-    const sublines = p.split("\n").map(l => l.trim()).filter(Boolean);
-
-    for (const line of sublines) {
-      if (y + lineH > bottom) newPage();
-
-      if (isClauseTitle(line)) {
-        doc.setFont("helvetica", "bold");
-        y = drawJustifiedParagraph(doc, line, marginX, y, maxW, lineH);
-        doc.setFont("helvetica", "normal");
-        y += 1.5;
-      } else {
-        doc.setFont("helvetica", "normal");
-        y = drawJustifiedParagraph(doc, line, marginX, y, maxW, lineH);
-      }
-    }
-
-    // Espaço entre parágrafos
-    y += 2;
+  // logo
+  if (USE_LOGO) {
+    try {
+      const img = await loadImageAsDataURL(LOGO_SRC);
+      const type = img.includes("png") ? "PNG" : "JPEG";
+      const w = 60, h = 22;
+      doc.addImage(img, type, (pageW - w) / 2, y, w, h);
+      y += h + 6;
+    } catch {}
   }
 
-  // Numeração de páginas
+  const lines = text.split("\n").map(l => l.trimEnd());
+
+  // título (primeira linha não vazia)
+  const titleIndex = lines.findIndex(l => l.trim());
+  if (titleIndex >= 0) {
+    doc.setFont("times", "bold");
+    doc.setFontSize(14);
+    doc.text(lines[titleIndex], pageW / 2, y, { align: "center" });
+    y += 8;
+  }
+
+  doc.setFont("times", "normal");
+  doc.setFontSize(11);
+
+  for (let i = titleIndex + 1; i < lines.length; i++) {
+    const t = lines[i].trim();
+
+    if (!t) {
+      y += 5;
+      continue;
+    }
+
+    if (/^cl[aá]usula/i.test(t)) {
+      y += 3;
+      doc.setFont("times", "bold");
+    } else {
+      doc.setFont("times", "normal");
+    }
+
+    const wrapped = doc.splitTextToSize(t, pageW - marginX * 2);
+    wrapped.forEach(line => {
+      if (y > bottom) {
+        doc.addPage();
+        y = top;
+      }
+      doc.text(line, marginX, y);
+      y += 5.6;
+    });
+  }
+
+  // assinaturas
+  y += 10;
+  doc.text(`Data: ${toPtBrLongDate()}`, marginX, y);
+  y += 12;
+  doc.text("______________________________________________", marginX, y);
+  y += 6;
+  doc.text("CONTRATANTE", marginX, y);
+  y += 12;
+  doc.text("______________________________________________", marginX, y);
+  y += 6;
+  doc.text("CONTRATADA", marginX, y);
+
+  // paginação
   const pages = doc.getNumberOfPages();
   for (let p = 1; p <= pages; p++) {
     doc.setPage(p);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-    doc.text(`Página ${p} de ${pages}`, pageW - marginX, pageH - 14, { align: "right" });
+    doc.setFontSize(9);
+    doc.text(`Página ${p} de ${pages}`, pageW - marginX, pageH - 10, { align: "right" });
   }
 
   doc.save(`Contrato - ${data.nome || "cliente"}.pdf`);
