@@ -1,7 +1,7 @@
 // Login simples (segurança básica)
 // Troque as credenciais aqui:
-const FIXED_USER = "admin";
-const FIXED_PASS = "1234";
+const FIXED_USER = "horadadiversao";
+const FIXED_PASS = "Contrato@2026";
 
 document.getElementById("btn").addEventListener("click", () => {
   const u = document.getElementById("user").value.trim();
