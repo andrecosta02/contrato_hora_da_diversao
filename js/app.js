@@ -12,6 +12,22 @@ const TEMPLATE_URL = `${APPS_SCRIPT_URL}?url=${encodeURIComponent(GOOGLE_DOC_PUB
 const USE_LOGO = true;
 const LOGO_SRC = "./assets/logo.jpg";
 
+
+function showLoadingOverlay() {
+  const ov = document.getElementById("loadingOverlay");
+  if (!ov) return;
+  ov.classList.remove("d-none");
+  ov.setAttribute("aria-hidden", "false");
+}
+
+function hideLoadingOverlay() {
+  const ov = document.getElementById("loadingOverlay");
+  if (!ov) return;
+  ov.classList.add("d-none");
+  ov.setAttribute("aria-hidden", "true");
+}
+
+
 // =========================
 // AUTH / LOGOUT
 // =========================
@@ -32,18 +48,10 @@ function applyMasks() {
 
   const rgEl = document.getElementById("rg");
   if (rgEl) IMask(rgEl, { mask: "00.000.000-0" });
+  // data_festa agora usa calendário nativo (<input type="date">)
+  // horas agora usam seletor nativo (<input type="time">)
 
-  const dataEl = document.getElementById("data_festa");
-  if (dataEl) IMask(dataEl, { mask: "00/00/0000" });
-
-  const hourMask = { mask: "00:00" };
-  const hIni = document.getElementById("hora_inicio");
-  const hFim = document.getElementById("hora_fim");
-  if (hIni) IMask(hIni, hourMask);
-  if (hFim) IMask(hFim, hourMask);
-
-  const horasEl = document.getElementById("total_horas");
-  if (horasEl) IMask(horasEl, { mask: Number, scale: 0, min: 0, max: 24 });
+  // total_horas agora é automático (readonly) — sem máscara
 
   const moneyOpts = {
     mask: "R$ num",
@@ -60,11 +68,297 @@ function applyMasks() {
     }
   };
   const vp = document.getElementById("valor_pacote");
-  const vt = document.getElementById("valor_total");
   if (vp) IMask(vp, moneyOpts);
-  if (vt) IMask(vt, moneyOpts);
+
+  // valor_total e valor_extenso agora são automáticos (readonly) — sem máscara
 }
+
 applyMasks();
+
+// =========================
+// GRID + CÁLCULOS AUTOMÁTICOS
+// =========================
+const MONEY_MASK_OPTS = {
+  mask: "R$ num",
+  blocks: {
+    num: {
+      mask: Number,
+      thousandsSeparator: ".",
+      radix: ",",
+      scale: 2,
+      padFractionalZeros: true,
+      normalizeZeros: true,
+      min: 0
+    }
+  }
+};
+
+function parseBRLToNumber(str) {
+  const s = String(str || "").replace(/\s/g, "").replace("R$", "");
+  if (!s) return 0;
+  const normalized = s.replace(/\./g, "").replace(",", ".");
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatBRL(n) {
+  const v = Number(n || 0);
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function parseHHMM(s) {
+  const m = String(s || "").match(/^(\d{2}):(\d{2})$/);
+  if (!m) return null;
+  const hh = Number(m[1]), mm = Number(m[2]);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+  return hh * 60 + mm;
+}
+
+function calcDurationMinutes(startHHMM, endHHMM) {
+  const a = parseHHMM(startHHMM);
+  const b = parseHHMM(endHHMM);
+  if (a == null || b == null) return null;
+  let diff = b - a;
+  if (diff < 0) diff += 24 * 60;
+  return diff;
+}
+
+function minutesToHHMMH(mins) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}h`;
+}
+
+function formatDateToBR(value) {
+  const v = String(value || "").trim();
+  if (!v) return "";
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+  return v;
+}
+
+// ---- Extenso (pt-BR) ----
+function numeroPorExtenso(n) {
+  const unidades = ["", "um", "dois", "três", "quatro", "cinco", "seis", "sete", "oito", "nove"];
+  const dezADezenove = ["dez", "onze", "doze", "treze", "quatorze", "quinze", "dezesseis", "dezessete", "dezoito", "dezenove"];
+  const dezenas = ["", "", "vinte", "trinta", "quarenta", "cinquenta", "sessenta", "setenta", "oitenta", "noventa"];
+  const centenas = ["", "cento", "duzentos", "trezentos", "quatrocentos", "quinhentos", "seiscentos", "setecentos", "oitocentos", "novecentos"];
+
+  function ate999(num) {
+    num = num % 1000;
+    if (num === 0) return "";
+    if (num === 100) return "cem";
+    const c = Math.floor(num / 100);
+    const d = Math.floor((num % 100) / 10);
+    const u = num % 10;
+
+    let parts = [];
+    if (c) parts.push(centenas[c]);
+    if (d === 1) {
+      parts.push(dezADezenove[u]);
+    } else {
+      if (d) parts.push(dezenas[d]);
+      if (u) parts.push(unidades[u]);
+    }
+    return parts.join(" e ");
+  }
+
+  function grupo(num, singular, plural) {
+    if (num === 0) return "";
+    if (num === 1) return `${ate999(num)} ${singular}`.trim();
+    return `${ate999(num)} ${plural}`.trim();
+  }
+
+  n = Math.floor(n);
+  if (n === 0) return "zero";
+
+  const milhoes = Math.floor(n / 1000000);
+  const milhares = Math.floor((n % 1000000) / 1000);
+  const resto = n % 1000;
+
+  let parts = [];
+  if (milhoes) parts.push(grupo(milhoes, "milhão", "milhões"));
+  if (milhares) {
+    if (milhares === 1) parts.push("mil");
+    else parts.push(`${ate999(milhares)} mil`.trim());
+  }
+  if (resto) parts.push(ate999(resto));
+
+  return parts.filter(Boolean).join(" e ").replace(/\s+/g, " ").trim();
+}
+
+function valorBRLPorExtenso(valor) {
+  const v = Number(valor || 0);
+  const reais = Math.floor(v);
+  const centavos = Math.round((v - reais) * 100);
+
+  let out = "";
+  if (reais === 0) out = "zero real";
+  else if (reais === 1) out = "um real";
+  else out = `${numeroPorExtenso(reais)} reais`;
+
+  if (centavos) {
+    if (centavos === 1) out += " e um centavo";
+    else out += ` e ${numeroPorExtenso(centavos)} centavos`;
+  }
+  return out;
+}
+
+// ---- Grid: Adicionais ----
+function createAdicionalRow(initial = {}) {
+  const tbody = document.querySelector("#tblAdicionais tbody");
+  if (!tbody) return;
+
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td><input class="form-control form-control-sm grid-input add-nome" placeholder="Ex: Pipoca" /></td>
+    <td><input class="form-control form-control-sm grid-input add-valor" placeholder="R$ 0,00" /></td>
+    <td><input class="form-control form-control-sm grid-input add-obs" placeholder="Opcional" /></td>
+    <td><button type="button" class="btn btn-sm btn-outline-danger btn-icon btn-rem">&times;</button></td>
+  `;
+  tbody.appendChild(tr);
+
+  const nome = tr.querySelector(".add-nome");
+  const valor = tr.querySelector(".add-valor");
+  const obs = tr.querySelector(".add-obs");
+
+  nome.value = initial.nome || "";
+  valor.value = initial.valor || "";
+  obs.value = initial.obs || "";
+
+  if (valor) IMask(valor, MONEY_MASK_OPTS);
+
+  tr.querySelector(".btn-rem").addEventListener("click", () => {
+    tr.remove();
+    recalcTotals();
+  });
+
+  [nome, valor, obs].forEach(el => el.addEventListener("input", recalcTotals));
+
+  recalcTotals();
+}
+
+function getAdicionaisRows() {
+  return Array.from(document.querySelectorAll("#tblAdicionais tbody tr"))
+    .map(tr => {
+      const nome = tr.querySelector(".add-nome")?.value.trim() || "";
+      const valorStr = tr.querySelector(".add-valor")?.value.trim() || "";
+      const obs = tr.querySelector(".add-obs")?.value.trim() || "";
+      const valorNum = parseBRLToNumber(valorStr);
+      return { nome, valorStr, valorNum, obs };
+    })
+    .filter(r => r.nome || r.valorStr || r.obs);
+}
+
+function buildAdicionaisText() {
+  const rows = getAdicionaisRows();
+  if (!rows.length) return "—";
+  return rows.map(r => {
+    const val = r.valorStr || formatBRL(r.valorNum);
+    const obs = r.obs ? ` - Obs: ${r.obs}` : "";
+    return `- ${r.nome || "Adicional"} - ${val}${obs}`;
+  }).join("\n");
+}
+
+// ---- Grid: Vencimentos ----
+function createVencimentoRow(initial = {}) {
+  const tbody = document.querySelector("#tblVencimentos tbody");
+  if (!tbody) return;
+
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td><input class="form-control form-control-sm grid-input ven-data" type="date" /></td>
+    <td><input class="form-control form-control-sm grid-input ven-valor" placeholder="R$ 0,00" /></td>
+    <td><input class="form-control form-control-sm grid-input ven-obs" placeholder="Opcional" /></td>
+    <td><button type="button" class="btn btn-sm btn-outline-danger btn-icon btn-rem">&times;</button></td>
+  `;
+  tbody.appendChild(tr);
+
+  const data = tr.querySelector(".ven-data");
+  const valor = tr.querySelector(".ven-valor");
+  const obs = tr.querySelector(".ven-obs");
+
+  data.value = initial.data || "";
+  valor.value = initial.valor || "";
+  obs.value = initial.obs || "";  if (valor) IMask(valor, MONEY_MASK_OPTS);
+
+  tr.querySelector(".btn-rem").addEventListener("click", () => tr.remove());
+}
+
+function getVencimentosRows() {
+  return Array.from(document.querySelectorAll("#tblVencimentos tbody tr"))
+    .map(tr => {
+      const dataRaw = tr.querySelector(".ven-data")?.value.trim() || "";
+      const data = formatDateToBR(dataRaw);
+      const valorStr = tr.querySelector(".ven-valor")?.value.trim() || "";
+      const obs = tr.querySelector(".ven-obs")?.value.trim() || "";
+      return { data, valorStr, obs };
+    })
+    .filter(r => r.data || r.valorStr || r.obs);
+}
+
+function buildVencimentosText() {
+  const rows = getVencimentosRows();
+  if (!rows.length) return "—";
+  return rows.map(r => {
+    const obs = r.obs ? ` - Obs: ${r.obs}` : "";
+    const val = r.valorStr || "—";
+    const dt = r.data || "—";
+    return `- ${dt} - ${val}${obs}`;
+  }).join("\n");
+}
+
+// ---- Cálculos automáticos ----
+function recalcTotalHoras() {
+  const hIni = document.getElementById("hora_inicio")?.value || "";
+  const hFim = document.getElementById("hora_fim")?.value || "";
+  const totalEl = document.getElementById("total_horas");
+  if (!totalEl) return;
+
+  const mins = calcDurationMinutes(hIni, hFim);
+  totalEl.value = mins == null ? "" : minutesToHHMMH(mins);
+}
+
+function recalcTotals() {
+  recalcTotalHoras();
+
+  const vpStr = document.getElementById("valor_pacote")?.value || "";
+  const vp = parseBRLToNumber(vpStr);
+
+  const addsSum = getAdicionaisRows().reduce((s, r) => s + (r.valorNum || 0), 0);
+
+  const total = vp + addsSum;
+
+  const vtEl = document.getElementById("valor_total");
+  const veEl = document.getElementById("valor_extenso");
+
+  if (vtEl) vtEl.value = formatBRL(total);
+  if (veEl) veEl.value = valorBRLPorExtenso(total);
+}
+
+function initGridsAndAutoCalc() {
+  document.getElementById("addAdicional")?.addEventListener("click", () => createAdicionalRow());
+  document.getElementById("addVencimento")?.addEventListener("click", () => createVencimentoRow());
+
+  // 1 linha inicial em cada grid
+  if (document.querySelector("#tblAdicionais tbody")) createAdicionalRow();
+  if (document.querySelector("#tblVencimentos tbody")) createVencimentoRow();
+
+  ["hora_inicio", "hora_fim", "valor_pacote"].forEach(id => {
+    document.getElementById(id)?.addEventListener("input", recalcTotals);
+  });
+
+  document.getElementById("total_horas")?.setAttribute("readonly", "readonly");
+  document.getElementById("valor_total")?.setAttribute("readonly", "readonly");
+  document.getElementById("valor_extenso")?.setAttribute("readonly", "readonly");
+
+  recalcTotals();
+}
+
+document.addEventListener("DOMContentLoaded", initGridsAndAutoCalc);
+
+
 
 // =========================
 // UTILS
@@ -87,18 +381,25 @@ function getFormData() {
     pacote: getValue("pacote"),
     valor_pacote: getValue("valor_pacote"),
     tema: getValue("tema"),
-    adicionais: getValue("adicionais"),
-    data_festa: getValue("data_festa"),
+
+    adicionais: buildAdicionaisText(),
+
+    data_festa: formatDateToBR(getValue("data_festa")),
+
     hora_inicio: getValue("hora_inicio"),
     hora_fim: getValue("hora_fim"),
-    total_horas: getValue("total_horas"),
+    total_horas: getValue("total_horas"), // já vem no formato 04:00h
+
     valor_total_contrato: getValue("valor_total"),
     valor_total_contrato_extenso: getValue("valor_extenso"),
-    proximos_vencimentos: getValue("vencimentos"),
+
+    proximos_vencimentos: buildVencimentosText(),
+
     dia_assinatura: dia,
     mes_assinatura: mes,
   };
 }
+
 
 function escapeHtml(str) {
   return str
@@ -112,7 +413,14 @@ function escapeHtml(str) {
 function applyTemplate(html, data) {
   return html.replace(/\{\{(\w+)\}\}/g, (_, key) => {
     const v = data[key];
-    return v ? escapeHtml(String(v)) : "—";
+    if (!v) return "—";
+
+    // Mantém quebras de linha em campos que viram lista no contrato
+    if (key === "adicionais" || key === "proximos_vencimentos") {
+      return escapeHtml(String(v)).replace(/\n/g, "<br>");
+    }
+
+    return escapeHtml(String(v));
   });
 }
 
@@ -421,11 +729,22 @@ async function gerarContratoPDF() {
 
 
 
-document.getElementById("gerar").addEventListener("click", async () => {
+document.getElementById("gerar").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  if (btn?.dataset?.loading === "1") return;
+
+  btn.dataset.loading = "1";
+  btn.disabled = true;
+  showLoadingOverlay();
+
   try {
     await gerarContratoPDF();
-  } catch (e) {
-    console.error(e);
-    alert(e?.message || "Erro ao gerar o PDF.");
+  } catch (err) {
+    console.error(err);
+    alert(err?.message || "Erro ao gerar o PDF.");
+  } finally {
+    hideLoadingOverlay();
+    btn.disabled = false;
+    btn.dataset.loading = "0";
   }
 });
