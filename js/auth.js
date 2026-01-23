@@ -15,3 +15,18 @@ document.getElementById("btn").addEventListener("click", () => {
 
   document.getElementById("msg").textContent = "Usuário ou senha inválidos.";
 });
+
+const togglePassword = document.getElementById("togglePassword");
+const passwordInput = document.getElementById("pass");
+const icon = togglePassword?.querySelector("i");
+
+if (togglePassword && passwordInput && icon) {
+  togglePassword.addEventListener("click", () => {
+    const isPassword = passwordInput.type === "password";
+
+    passwordInput.type = isPassword ? "text" : "password";
+    icon.classList.toggle("bi-eye", !isPassword);
+    icon.classList.toggle("bi-eye-slash", isPassword);
+  });
+}
+
