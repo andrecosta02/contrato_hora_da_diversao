@@ -380,8 +380,8 @@ function getFormData() {
     endereco_completo: getValue("endereco"),
     // pacote: getValue("pacote"),
     pacote: pacoteSelect.value === "outro"
-      ? getValue("pacoteOutro")
-      : getValue("pacote"),
+    ? getValue("pacoteOutro")
+    : getValue("pacote"),
 
     valor_pacote: getValue("valor_pacote"),
     tema: getValue("tema"),
@@ -632,7 +632,6 @@ function addFooter(doc, opts) {
     { align: "center" }
   );
 }
-
 
 
 async function gerarContratoPDF() {
