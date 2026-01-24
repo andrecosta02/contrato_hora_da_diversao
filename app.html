@@ -72,10 +72,29 @@
 
               <hr class="my-2">
 
-              <div class="col-12 col-md-6">
+              <!-- <div class="col-12 col-md-6">
                 <label class="form-label">Pacote</label>
                 <input id="pacote" class="form-control" placeholder="Ex: Completo">
+              </div> -->
+              <div class="col-12 col-md-6">
+                <label class="form-label">Pacote</label>
+                <select id="pacote" class="form-select">
+                  <!-- <option value="">Selecione um pacote</option> -->
+                  <option value="Só um bolinho">Só um bolinho</option>
+                  <option value="Mágico">Mágico</option>
+                  <option value="Encanto">Encanto</option>
+                  <option value="Capricho">Capricho</option>
+                  <option value="Super Capricho">Super Capricho</option>
+                  <option value="outro">Outro (digitar)</option>
+                </select>
               </div>
+
+              <div class="col-12 col-md-6 d-none" id="pacoteOutroWrapper">
+                <label class="form-label">Nome do pacote</label>
+                <input id="pacoteOutro" class="form-control" placeholder="Digite o nome do pacote">
+              </div>
+
+
 
               <div class="col-12 col-md-6">
                 <label class="form-label">Valor do pacote</label>

@@ -378,7 +378,11 @@ function getFormData() {
     rg: getValue("rg"),
     cpf: getValue("cpf"),
     endereco_completo: getValue("endereco"),
-    pacote: getValue("pacote"),
+    // pacote: getValue("pacote"),
+    pacote: pacoteSelect.value === "outro"
+      ? getValue("pacoteOutro")
+      : getValue("pacote"),
+
     valor_pacote: getValue("valor_pacote"),
     tema: getValue("tema"),
 
@@ -748,3 +752,16 @@ document.getElementById("gerar").addEventListener("click", async (e) => {
     btn.dataset.loading = "0";
   }
 });
+
+
+const pacoteSelect = document.getElementById("pacote");
+const pacoteOutroWrapper = document.getElementById("pacoteOutroWrapper");
+
+if (pacoteSelect && pacoteOutroWrapper) {
+  pacoteSelect.addEventListener("change", () => {
+    pacoteOutroWrapper.classList.toggle(
+      "d-none",
+      pacoteSelect.value !== "outro"
+    );
+  });
+}
