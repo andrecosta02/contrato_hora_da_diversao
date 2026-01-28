@@ -413,7 +413,8 @@ function getFormData() {
     tema: getValue("tema"),
 
     adicionais: buildAdicionaisText(),
-
+    
+    data_assinatura: getValue("data_assinatura"),
     data_festa: formatDateToBR(getValue("data_festa")),
 
     hora_inicio: getValue("hora_inicio"),
