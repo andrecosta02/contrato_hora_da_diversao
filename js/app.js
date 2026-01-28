@@ -1,17 +1,8 @@
 // =========================
 // CONFIG
 // =========================
-const GOOGLE_DOC_PUB_URL_BASE =
-  "https://docs.google.com/document/d/e/2PACX-1vT99qWFGHbZKw7GFCxtdI5HR0dV4C7v8LmXNsGIfwFjvd2OqiG2gjC51yFalSwhrg/pub";
 
-const APPS_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbyPfAvgIGpQBDcO1Y75ZF2K43uR5lQ4ZtNK0Qmn4oi5kz70xf3X1RxDBXpEVV5pJg1e/exec";
-
-const TEMPLATE_URL = `${APPS_SCRIPT_URL}?url=${encodeURIComponent(GOOGLE_DOC_PUB_URL_BASE)}`;
-
-const USE_LOGO = true;
-const LOGO_SRC = "./assets/logo.jpg";
-
+const APPS_SCRIPT_PDF_URL = "https://script.google.com/macros/s/AKfycbyPfAvgIGpQBDcO1Y75ZF2K43uR5lQ4ZtNK0Qmn4oi5kz70xf3X1RxDBXpEVV5pJg1e/exec"; // ex: https://script.google.com/macros/s/XXXXX/exec
 
 function showLoadingOverlay() {
   const ov = document.getElementById("loadingOverlay");
@@ -26,7 +17,6 @@ function hideLoadingOverlay() {
   ov.classList.add("d-none");
   ov.setAttribute("aria-hidden", "true");
 }
-
 
 // =========================
 // AUTH / LOGOUT
@@ -404,113 +394,6 @@ function getFormData() {
   };
 }
 
-
-function escapeHtml(str) {
-  return str
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function applyTemplate(html, data) {
-  return html.replace(/\{\{(\w+)\}\}/g, (_, key) => {
-    const v = data[key];
-    if (!v) return "—";
-
-    // Mantém quebras de linha em campos que viram lista no contrato
-    if (key === "adicionais" || key === "proximos_vencimentos") {
-      return escapeHtml(String(v)).replace(/\n/g, "<br>");
-    }
-
-    return escapeHtml(String(v));
-  });
-}
-
-function extractBodyHtml(fullHtml) {
-  const doc = new DOMParser().parseFromString(fullHtml, "text/html");
-  doc.querySelectorAll("script, link").forEach(el => el.remove());
-  return doc.body ? doc.body.innerHTML : fullHtml;
-}
-
-async function fetchTemplateHtml() {
-  const res = await fetch(TEMPLATE_URL, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Não consegui baixar o modelo do contrato. HTTP ${res.status}`);
-  const txt = await res.text();
-  if (txt.includes("Não foi possível abrir o arquivo")) {
-    throw new Error("Documento não acessível. Verifique se está PUBLICADO NA WEB.");
-  }
-  return txt;
-}
-
-function htmlToPlainText(html) {
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  doc.querySelectorAll("script, style, link").forEach(el => el.remove());
-  doc.querySelectorAll("br").forEach(br => br.replaceWith("\n"));
-  doc.querySelectorAll("p, div").forEach(el => el.append("\n"));
-  let text = doc.body ? doc.body.textContent : "";
-  return text.replace(/\n{3,}/g, "\n\n").trim();
-}
-
-function buildHeaderLogoHtml() {
-  if (!USE_LOGO) return "";
-  return `<div class="logo-wrap"><img src="${LOGO_SRC}" alt="Logo"></div>`;
-}
-
-function renderPrintableContract(text) {
-  const safe = escapeHtml(text).replaceAll("\n", "<br/>");
-  return `<div>${safe}</div>`;
-}
-
-function nextFrame() {
-  return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-}
-
-async function waitForImages(container) {
-  const imgs = Array.from(container.querySelectorAll("img"));
-  await Promise.all(imgs.map(img => {
-    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
-    return new Promise(resolve => {
-      img.onload = () => resolve();
-      img.onerror = () => resolve();
-    });
-  }));
-}
-
-// =========================
-// PDF
-// =========================
-async function loadImageAsDataURL(url) {
-  const res = await fetch(url);
-  const blob = await res.blob();
-  return await new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.readAsDataURL(blob);
-  });
-}
-
-function cleanGoogleDocsFooter(text) {
-  const lines = text.split("\n");
-  const banned = [
-    /Publicada usando o Google Docs/i,
-    /Denunciar abuso/i,
-    /Saiba mais/i,
-    /Atualizado automaticamente/i,
-    /CONTRATO_HD_2026_TEMPLATE/i
-  ];
-
-  const filtered = lines.filter(line => {
-    const t = line.trim();
-    if (!t) return true; // mantém linhas vazias (espaço)
-    return !banned.some(rx => rx.test(t));
-  });
-
-  // remove excesso de linhas em branco no fim
-  return filtered.join("\n").replace(/\n{3,}/g, "\n\n").trim();
-}
-
 function validateRequiredFields(data) {
   const required = [
     ["nome", "Nome"],
@@ -528,113 +411,14 @@ function validateRequiredFields(data) {
     .map(([, label]) => label);
 }
 
-function toPtBrLongDate(date = new Date()) {
-  return date.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric"
-  });
-}
 
-function isClauseTitle(line) {
-  const t = (line || "").trim();
-  return /^CLÁUSULA\b/i.test(t) || /^CLAUSULA\b/i.test(t);
-}
 
-/**
- * Draw a justified paragraph (Word-like). Justifies all lines except the last.
- */
-function drawJustifiedParagraph(doc, text, x, y, maxW, lineH) {
-  const words = String(text).trim().split(/\s+/).filter(Boolean);
-  if (!words.length) return y;
-
-  const spaceW = doc.getTextWidth(" ");
-  let line = [];
-  let lineW = 0;
-
-  const flush = (isLast) => {
-    if (!line.length) return;
-    if (isLast || line.length === 1) {
-      doc.text(line.join(" "), x, y);
-      y += lineH;
-      return;
-    }
-    const wordsW = line.reduce((sum, w) => sum + doc.getTextWidth(w), 0);
-    const gaps = line.length - 1;
-    const extra = Math.max(0, maxW - wordsW);
-    const gapW = extra / gaps;
-
-    let cx = x;
-    for (let i = 0; i < line.length; i++) {
-      const w = line[i];
-      doc.text(w, cx, y);
-      cx += doc.getTextWidth(w);
-      if (i < line.length - 1) cx += gapW;
-    }
-    y += lineH;
-  };
-
-  for (const w of words) {
-    const wW = doc.getTextWidth(w);
-    const nextW = line.length === 0 ? wW : lineW + spaceW + wW;
-    if (nextW <= maxW) {
-      line.push(w);
-      lineW = nextW;
-    } else {
-      flush(false);
-      line = [w];
-      lineW = wW;
-    }
-  }
-  flush(true);
-  return y;
-}
-
-function addHeader(doc, opts) {
-  const { pageW, marginX, logoDataUrl } = opts;
-
-  let y = 10;
-
-  if (logoDataUrl) {
-    const imgType = logoDataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
-    const imgW = 42;
-    const imgH = 18;
-    doc.addImage(logoDataUrl, imgType, (pageW - imgW) / 2, y, imgW, imgH);
-    y += imgH + 2;
-  }
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  // doc.text("CONTRATO DE ADESÃO DE LOCAÇÃO PARA USO", pageW / 2, y, { align: "center" });
-  // y += 6;
-  // doc.text("DE ESPAÇO & DECORAÇÃO DE FESTA INFANTIL", pageW / 2, y, { align: "center" });
-
-  // subtle separator like a header rule
-  y += 4;
-  doc.setDrawColor(0);
-  doc.setLineWidth(0.2);
-  doc.line(marginX, y, pageW - marginX, y);
-}
-
-function addFooter(doc, opts) {
-  const { pageW, pageH } = opts;
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.text("HORA DA DIVERSÃO", pageW / 2, pageH - 12, { align: "center" });
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
-  doc.text(
-    "Rua Dom Sebastião Leme, 576  |  Bairro Peixinhos |  Olinda  |  CEP:  53230-370  |  Fone: +55 81 99292-9205",
-    pageW / 2,
-    pageH - 7,
-    { align: "center" }
-  );
-}
-
+// ==========================================
+// FUNÇÃO PRINCIPAL (Baseada no seu código)
+// ==========================================
 
 async function gerarContratoPDF() {
+  // Mantendo sua lógica de coleta de dados
   const data = getFormData();
 
   const missing = validateRequiredFields(data);
@@ -643,94 +427,58 @@ async function gerarContratoPDF() {
     return;
   }
 
-  const rawHtml = await fetchTemplateHtml();
-  const templateBody = extractBodyHtml(rawHtml);
-  const filledHtml = applyTemplate(templateBody, data);
+  console.log(JSON.stringify(data))
 
-  let text = htmlToPlainText(filledHtml);
-  text = cleanGoogleDocsFooter(text);
+  // === NOVO FLUXO: pede o PDF pronto ao Apps Script (retorna JSON com base64)
+  // const resp = await fetch(APPS_SCRIPT_PDF_URL, {
+  //   method: "POST",
+  //   headers: { "Content-Type": "application/json" },
+  //   body: JSON.stringify(data),
+  // });
 
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+  const form = new FormData();
+  Object.keys(data).forEach((k) => {
+    form.append(k, data[k] ?? "");
+  });
 
-  const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
+  const resp = await fetch(APPS_SCRIPT_PDF_URL, {
+    method: "POST",
+    body: form,
+  });
 
-  // Margens iguais ao DOC (0,5") ~ 12,7mm
-  const marginX = 12.7;
 
-  // Header/Footer
-  let logoDataUrl = null;
-  if (USE_LOGO) {
-    try {
-      logoDataUrl = await loadImageAsDataURL(LOGO_SRC);
-    } catch {}
+  console.log("Resposta do Apps Script:", resp);
+
+  const json = await resp.json().catch(() => null);
+  if (!json || json.ok !== true) {
+    const msg = json?.error || "Erro ao gerar PDF no Apps Script.";
+    throw new Error(msg);
   }
 
-  const headerReserve = 40; // espaço reservado pro cabeçalho
-  const top = headerReserve + 6;
-  const bottom = pageH - 22; // espaço reservado pro rodapé
+  const base64 = json.base64;
+  const filename = json.filename || `Contrato - ${data.nome || "cliente"}.pdf`;
 
-  const maxW = pageW - marginX * 2;
-  const lineH = 5; // ~10pt
-
-  const applyPageChrome = () => {
-    addHeader(doc, { pageW, marginX, logoDataUrl });
-    addFooter(doc, { pageW, pageH });
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-  };
-
-  applyPageChrome();
-
-  let y = top;
-
-  const newPage = () => {
-    doc.addPage();
-    applyPageChrome();
-    y = top;
-  };
-
-  // Texto: separar por parágrafos (linha em branco)
-  const paragraphs = text
-    .split(/\n\s*\n/)
-    .map(p => p.trim())
-    .filter(Boolean);
-
-  for (const p of paragraphs) {
-    const sublines = p.split("\n").map(l => l.trim()).filter(Boolean);
-
-    for (const line of sublines) {
-      if (y + lineH > bottom) newPage();
-
-      if (isClauseTitle(line)) {
-        doc.setFont("helvetica", "bold");
-        y = drawJustifiedParagraph(doc, line, marginX, y, maxW, lineH);
-        doc.setFont("helvetica", "normal");
-        y += 1.5;
-      } else {
-        doc.setFont("helvetica", "normal");
-        y = drawJustifiedParagraph(doc, line, marginX, y, maxW, lineH);
-      }
-    }
-
-    // Espaço entre parágrafos
-    y += 2;
+  // base64 -> bytes -> Blob
+  const byteChars = atob(base64);
+  const byteNumbers = new Array(byteChars.length);
+  for (let i = 0; i < byteChars.length; i++) {
+    byteNumbers[i] = byteChars.charCodeAt(i);
   }
+  const byteArray = new Uint8Array(byteNumbers);
+  const blob = new Blob([byteArray], { type: json.mimeType || "application/pdf" });
 
-  // Numeração de páginas
-  const pages = doc.getNumberOfPages();
-  for (let p = 1; p <= pages; p++) {
-    doc.setPage(p);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-    doc.text(`Página ${p} de ${pages}`, pageW - marginX, pageH - 14, { align: "right" });
-  }
+  // Download (PC/Android). No iPhone, pode abrir em nova aba dependendo do Safari.
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 
-  doc.save(`Contrato - ${data.nome || "cliente"}.pdf`);
+  // libera memória depois
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
-
-
 
 document.getElementById("gerar").addEventListener("click", async (e) => {
   const btn = e.currentTarget;
@@ -751,7 +499,6 @@ document.getElementById("gerar").addEventListener("click", async (e) => {
     btn.dataset.loading = "0";
   }
 });
-
 
 const pacoteSelect = document.getElementById("pacote");
 const pacoteOutroWrapper = document.getElementById("pacoteOutroWrapper");
