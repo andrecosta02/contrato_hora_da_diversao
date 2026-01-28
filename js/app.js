@@ -38,9 +38,6 @@ function applyMasks() {
 
   const rgEl = document.getElementById("rg");
   if (rgEl) IMask(rgEl, { mask: "00.000.000-0" });
-  // data_festa agora usa calendário nativo (<input type="date">)
-  // horas agora usam seletor nativo (<input type="time">)
-
   // total_horas agora é automático (readonly) — sem máscara
 
   const moneyOpts = {
@@ -60,7 +57,9 @@ function applyMasks() {
   const vp = document.getElementById("valor_pacote");
   if (vp) IMask(vp, moneyOpts);
 
-  // valor_total e valor_extenso agora são automáticos (readonly) — sem máscara
+  const vs = document.getElementById("valor_sinal");
+  if (vs) IMask(vs, moneyOpts);
+
 }
 
 applyMasks();
@@ -299,6 +298,7 @@ function buildVencimentosText() {
   }).join("\n");
 }
 
+
 // ---- Cálculos automáticos ----
 function recalcTotalHoras() {
   const hIni = document.getElementById("hora_inicio")?.value || "";
@@ -310,21 +310,47 @@ function recalcTotalHoras() {
   totalEl.value = mins == null ? "" : minutesToHHMMH(mins);
 }
 
+function recalcValorSinalExtenso() {
+  const vsEl = document.getElementById("valor_sinal");
+  const vseEl = document.getElementById("valor_sinal_extenso");
+  if (!vsEl || !vseEl) return;
+
+  const n = parseBRLToNumber(vsEl.value || "");
+  vseEl.value = n > 0 ? valorBRLPorExtenso(n) : "";
+}
+
+function getDiaMesFromDateInput(dateValue) {
+  // dateValue vem como "yyyy-mm-dd"
+  const v = String(dateValue || "").trim();
+  if (!v) return null;
+
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const dia = String(d.getDate()).padStart(2, "0");
+  const mes = d.toLocaleString("pt-BR", { month: "long" });
+  return { dia, mes };
+}
+
+
 function recalcTotals() {
   recalcTotalHoras();
-
+  
   const vpStr = document.getElementById("valor_pacote")?.value || "";
   const vp = parseBRLToNumber(vpStr);
-
+  
   const addsSum = getAdicionaisRows().reduce((s, r) => s + (r.valorNum || 0), 0);
-
+  
   const total = vp + addsSum;
-
+  
   const vtEl = document.getElementById("valor_total");
-  const veEl = document.getElementById("valor_extenso");
-
+  const veEl = document.getElementById("valor_pacote_extenso");
+  
   if (vtEl) vtEl.value = formatBRL(total);
   if (veEl) veEl.value = valorBRLPorExtenso(total);
+
+  recalcValorSinalExtenso();
 }
 
 function initGridsAndAutoCalc() {
@@ -335,13 +361,17 @@ function initGridsAndAutoCalc() {
   if (document.querySelector("#tblAdicionais tbody")) createAdicionalRow();
   if (document.querySelector("#tblVencimentos tbody")) createVencimentoRow();
 
-  ["hora_inicio", "hora_fim", "valor_pacote"].forEach(id => {
+  // ["hora_inicio", "hora_fim", "valor_pacote"].forEach(id => {
+  //   document.getElementById(id)?.addEventListener("input", recalcTotals);
+  // });
+  ["hora_inicio", "hora_fim", "valor_pacote", "valor_sinal"].forEach(id => {
     document.getElementById(id)?.addEventListener("input", recalcTotals);
   });
 
+
   document.getElementById("total_horas")?.setAttribute("readonly", "readonly");
   document.getElementById("valor_total")?.setAttribute("readonly", "readonly");
-  document.getElementById("valor_extenso")?.setAttribute("readonly", "readonly");
+  document.getElementById("valor_pacote_extenso")?.setAttribute("readonly", "readonly");
 
   recalcTotals();
 }
@@ -362,6 +392,12 @@ function getFormData() {
   const now = new Date();
   const dia = String(now.getDate()).padStart(2, "0");
   const mes = now.toLocaleString("pt-BR", { month: "long" });
+
+  const dataAss = getValue("data_assinatura");
+  const dm = getDiaMesFromDateInput(dataAss);
+  const diaAss = dm?.dia || dia;
+  const mesAss = dm?.mes || mes;
+
 
   return {
     nome: getValue("nome"),
@@ -385,12 +421,17 @@ function getFormData() {
     total_horas: getValue("total_horas"), // já vem no formato 04:00h
 
     valor_total_contrato: getValue("valor_total"),
-    valor_total_contrato_extenso: getValue("valor_extenso"),
+    valor_total_contrato_extenso: getValue("valor_pacote_extenso"),
+    valor_sinal: getValue("valor_sinal"),
+    valor_sinal_extenso: getValue("valor_sinal_extenso"),
 
     proximos_vencimentos: buildVencimentosText(),
 
-    dia_assinatura: dia,
-    mes_assinatura: mes,
+    // dia_assinatura: dia,
+    // mes_assinatura: mes,
+    dia_assinatura: diaAss,
+    mes_assinatura: mesAss,
+
   };
 }
 
@@ -404,6 +445,7 @@ function validateRequiredFields(data) {
     ["hora_inicio", "Hora início"],
     ["hora_fim", "Hora fim"],
     ["valor_total_contrato", "Valor total do contrato"],
+    ["data_assinatura", "Data de assinatura"],
   ];
 
   return required

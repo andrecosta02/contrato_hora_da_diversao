@@ -1,0 +1,19 @@
+{
+    "nome": "André",
+    "rg": "12.345.678",
+    "cpf": "123.456.789-00",
+    "endereco_completo": "Rua Brasília",
+    "pacote": "Só um bolinho",
+    "valor_pacote": "R$ 1.000,00",
+    "tema": "ToyStory",
+    "adicionais": "- Pipoca - R$ 100,00 - Obs: 1\n- Algodão - R$ 50,00 - Obs: 2",
+    "data_festa": "27/01/2026",
+    "hora_inicio": "22:10",
+    "hora_fim": "23:10",
+    "total_horas": "01:00h",
+    "valor_total_contrato": "R$ 1.150,00",
+    "valor_total_contrato_extenso": "mil e cento e cinquenta reais",
+    "proximos_vencimentos": "- 28/01/2026 - R$ 100,00 - Obs: 1\n- 29/01/2026 - R$ 1.050,00 - Obs: 2",
+    "dia_assinatura": "27",
+    "mes_assinatura": "janeiro"
+}

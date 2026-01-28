@@ -88,24 +88,42 @@
                   <option value="outro">Outro (digitar)</option>
                 </select>
               </div>
-
+              
+              
               <div class="col-12 col-md-6 d-none" id="pacoteOutroWrapper">
                 <label class="form-label">Nome do pacote</label>
                 <input id="pacoteOutro" class="form-control" placeholder="Digite o nome do pacote">
               </div>
-
-
+              
+              <div class="col-12 col-md-6">
+                <label class="form-label">Tema</label>
+                <input id="tema" class="form-control" placeholder="Ex: Patrulha Canina">
+              </div>
+              
+              <hr class="my-2">
 
               <div class="col-12 col-md-6">
                 <label class="form-label">Valor do pacote</label>
                 <input id="valor_pacote" class="form-control" placeholder="R$ 0,00">
               </div>
 
-              <div class="col-12 col-md-6">
-                <label class="form-label">Tema</label>
-                <input id="tema" class="form-control" placeholder="Ex: Patrulha Canina">
+              <div class="col-12 col-md-4">
+                <label class="form-label">Valor pacote por extenso</label>
+                <input id="valor_pacote_extenso" class="form-control" placeholder="Preenchido automaticamente" readonly>
               </div>
 
+
+              <div class="col-12 col-md-6">
+                <label class="form-label">Valor do sinal</label>
+                <input id="valor_sinal" class="form-control" placeholder="R$ 0,00">
+              </div>
+
+              <div class="col-12 col-md-4">
+                <label class="form-label">Valor Sinal por extenso</label>
+                <input id="valor_sinal_extenso" class="form-control" placeholder="Preenchido automaticamente" readonly>
+              </div>
+
+              <hr class="my-2">
               
               <div class="col-12">
                 <label class="form-label">Adicionais</label>
@@ -131,6 +149,11 @@
               <hr class="my-2">
 
               <div class="col-12 col-md-4">
+                <label class="form-label">Data de Assinatura</label>
+                <input id="data_assinatura" class="form-control" placeholder="dd/mm/aaaa" type="date">
+              </div>
+
+              <div class="col-12 col-md-4">
                 <label class="form-label">Data da festa</label>
                 <input id="data_festa" class="form-control" placeholder="dd/mm/aaaa" type="date">
               </div>
@@ -154,12 +177,6 @@
                 <label class="form-label">Valor total</label>
                 <input id="valor_total" class="form-control" placeholder="Calculado automaticamente" readonly>
               </div>
-
-              <div class="col-12 col-md-4">
-                <label class="form-label">Valor por extenso</label>
-                <input id="valor_extenso" class="form-control" placeholder="Preenchido automaticamente" readonly>
-              </div>
-
               
               <div class="col-12">
                 <label class="form-label">Próximos vencimentos</label>
