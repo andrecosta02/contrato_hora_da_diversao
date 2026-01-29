@@ -2,7 +2,7 @@
 // CONFIG
 // =========================
 
-const APPS_SCRIPT_PDF_URL = "https://script.google.com/macros/s/AKfycbyPfAvgIGpQBDcO1Y75ZF2K43uR5lQ4ZtNK0Qmn4oi5kz70xf3X1RxDBXpEVV5pJg1e/exec"; // ex: https://script.google.com/macros/s/XXXXX/exec
+const APPS_SCRIPT_PDF_URL = "https://script.google.com/macros/s/AKfycbw936MP3eQD2gOB4yuOjPQnTZTztKK85sYfbEpmRNiGTji9Md7AO9_77pPtfGgNFTPU/exec"; // ex: https://script.google.com/macros/s/XXXXX/exec
 
 function showLoadingOverlay() {
   const ov = document.getElementById("loadingOverlay");
